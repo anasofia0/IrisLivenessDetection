@@ -1,73 +1,77 @@
 import cv2 as cv
 import numpy as np
+import matplotlib.pyplot as plt
+
+def trata_img(img):
+
+    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(11,11))
+
+    blackhat = cv.morphologyEx(img, cv.MORPH_BLACKHAT, kernel)
+
+    img = img+blackhat
+
+    img = cv.GaussianBlur(img, (31,31), 1)
+    # cv.imshow('', img)
+    # cv.waitKey(0)
+
+    return img
 
 def segmenta_iris(img):
 
-    # suavizada = cv.medianBlur(img,7)
-    # _,limites = cv.threshold(suavizada,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+    pupila = cv.Canny(img,50,100)
+    iris = cv.Canny(img,20,20)
 
-    # bordas = cv.Canny(limites,0,0)
+    circulos = cv.HoughCircles(pupila,cv.HOUGH_GRADIENT,1,20,
+                                param1=50,param2=30,minRadius=0,maxRadius=0)
 
-    # cv.imshow('',bordas)
-    # cv.waitKey(0)
+    c = np.uint16(np.around(circulos))
+    c = (c[0,0,0], c[0,0,1], c[0,0,2])
 
-    # img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    # img_gray = cv.GaussianBlur(img_gray, (31, 31), 1)
+    circulos = cv.HoughCircles(iris,cv.HOUGH_GRADIENT,1,20,
+                                param1=50,param2=30,minRadius=0,maxRadius=0)
 
-    img_gray = cv.medianBlur(img, 11)
+    raios = np.uint16(np.around(circulos))
+    raios= raios[0,:]
 
-    # kernel = np.array([[-1,-1,-1],
-    #                     [-1,9,-1],
-    #                     [-1,-1,-1]])
+    raios = np.uint16(np.around(raios))
+    raios=raios[:,2]
 
-    # img_gray = cv.filter2D(img_gray,-1,kernel)
+    cond = np.logical_and(raios>90, raios<120)
+    raio = int(np.mean(raios[np.where(cond)]))
 
-    img_gray = cv.threshold(img_gray,140,255,cv.THRESH_BINARY)[1]
+    return c, raio
 
-    contornos = cv.findContours(img_gray, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)[0]
+def cria_mascara(img, pupila, r_iris):
 
-    img_contorno = np.copy(img_gray)
-    cv.drawContours(img_contorno, contornos, -1, (0, 255, 0))
+    print(img.shape)
 
-    cv.imshow('aaaaaaaaaaaaaaaa', img_contorno)
-    cv.waitKey(0)
+    mask = np.zeros(img.shape)
+    mask_aux = np.zeros(img.shape)
 
-    # kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(11,11))
-    # img_gray = cv.morphologyEx(img_gray, cv.MORPH_CLOSE, kernel, iterations=2)
+    branco = (255,255,255)
 
-    # img_gray = cv.Canny(img_gray, 50, 50)
+    mask = cv.circle(mask, (pupila[0],pupila[1]), r_iris, branco, -1)
+    mask_aux = cv.circle(mask_aux, (pupila[0],pupila[1]), pupila[2], branco, -1)
 
-    # cv.imshow('', img_gray)
-    # cv.waitKey(0)
+    mask = cv.subtract(mask, mask_aux)
+    mask = mask.astype('uint8')
 
-    # cv.imshow('', img_gray)
-    # cv.waitKey(0)
+    mask = cv.bitwise_and(mask, img)
 
-    circulos = cv.HoughCircles(img_contorno, cv.HOUGH_GRADIENT, 1,20,
-                                param1=150,param2=30,minRadius=0, maxRadius=500)
-
-    if circulos is not None:
-        circulos = np.uint16(np.around(circulos))
-        for i in circulos[0, :]:
-            center = (i[0], i[1])
-            # circle center
-            cv.circle(img, center, 1, (0, 100, 100), 3)
-            # circle outline
-            radius = i[2]
-            cv.circle(img, center, radius, (255, 0, 255), 3)
-
-    cv.imshow("detected circles", img)
-    cv.waitKey(0)
+    return mask
 
 def filtro_res1(img):
 
     row, col = img.shape
 
     x1 = np.copy(img)
+    x1 = x1.astype('uint64')
     x2 = np.copy(img)
+    x2 = x2.astype('uint64')
 
     for i in range(row):
         for j in range(col-1):
+            
             x1[i,j] = x1[i,j+1] - x1[i,j]
 
     for i in range(row-1):
@@ -76,30 +80,31 @@ def filtro_res1(img):
 
     r = np.minimum(x1, x2)
 
-    return r
+    return r.astype('uint8')
 
-def filtro_res2(img):
+"""
+MAIN
+"""
 
-    row, col = img.shape
-    x = np.copy(img)
+img = cv.imread('database/CASIA1/17/017_1_1.jpg', 0)
+# img = cv.imread('database/CASIA-Iris-Interval/003/R/S1003R04.jpg', 0)
 
-    for i in range(row):
-        for j in range(1,col-1):
-            
-            x[i,j] = x[i,j-1] + x[i,j+1] - 2*x[i,j]
-    
-    return x
-
-def aplica_filtros(img):
-
-    pass
-
-img = cv.imread('database/olho.jpg', 0)
-# img = cv.imread('database/iris57_64/057L_1.png', 0)
 cv.imshow('', img)
 cv.waitKey(0)
 
-img = filtro_res2(img)
+img_trat = trata_img(img)
+c, raio = segmenta_iris(img_trat)
 
-cv.imshow('', img)
+img_seg = np.copy(img)
+
+cv.circle(img_seg,(c[0],c[1]),c[2],(255,0,0),2)
+cv.circle(img_seg,(c[0],c[1]),int(raio*1.01),(255,0,0),2)
+
+cv.imshow('', img_seg)
+cv.waitKey(0)
+
+mascara = cria_mascara(img, c, raio)
+filtro = filtro_res1(mascara)
+
+cv.imshow('', filtro)
 cv.waitKey(0)
