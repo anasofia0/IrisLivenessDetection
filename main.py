@@ -16,8 +16,8 @@ def trata_img(img):
     img = img+blackhat
 
     img = cv.GaussianBlur(img, (35,35), 1)
-    # cv.imshow('', img)
-    # cv.waitKey(0)
+    cv.imshow('', img)
+    cv.waitKey(0)
 
     return img
 
@@ -107,9 +107,13 @@ def feature_extraction(path):
     d = []
     c = []
 
+    imgs = []
+
     for i in files:
 
         img = cv.imread(path+i)
+
+        imgs.append(img)
 
         kp = star.detect(img,None)
         kp, des = brief.compute(img, kp)
@@ -130,13 +134,11 @@ def feature_extraction(path):
     for i in d:
         hist.append(np.histogram(i, bins=256)[0])
 
-    print(hist)
-
     df_aux[:] = hist
 
-    return df, df_aux
+    return df, df_aux, imgs
 
-def model_training(df, hist):
+def model_training(df, hist, imgs):
 
     param_grid={'C':[0.1,1,10,100],
                 'gamma':[0.0001,0.001,0.1,1],
@@ -150,9 +152,17 @@ def model_training(df, hist):
     # testando
 
     pred = model.predict(hist.iloc[30:])
-    esperado = df.iloc[30:,0]
+    esperado = df.iloc[30:,0].tolist()
 
     print(f'acuracia: {accuracy_score(esperado,pred)*100}%')
+    
+    for i in range(len(pred)):
+        if pred[i] != esperado[i] and esperado[i]:
+            cv.imshow(f'falso negativo (img {i+1})', imgs[30+i])
+        elif pred[i] != esperado[i] and not esperado[i]:
+            cv.imshow(f'falso positivo (img {i+1})', imgs[i])
+    
+    cv.waitKey(0)
     
 def pega_img():
     
@@ -212,21 +222,15 @@ def pre_processing():
 MAIN
 """
 
-# print('treinando com os dados sem filtro:', end='')
-df, hist = feature_extraction('database/olhos/tratado/')
+print('treinando com os dados sem filtro:', end='')
+df, hist, imgs = feature_extraction('database/olhos/tratado/')
+model_training(df, hist, imgs)
 
-hist = np.histogram(df.iloc[0,1], bins=256)[0]
+print('treinando com os dados com filtro:', end='')
+df, hist, imgs = feature_extraction('database/olhos/tratado_filtro/')
+model_training(df, hist, imgs)
 
-plt.hist(hist, bins=256)
-plt.show()
-
-# model_training(df, hist)
-
-# print('treinando com os dados com filtro:', end='')
-# df, hist = feature_extraction('database/olhos/tratado_filtro/')
-# model_training(df, hist)
-
-img = cv.imread('database/olhos/verdadeiro/1.jpg')
+img = cv.imread('database/olhos/verdadeiro/1.jpg', 0)
 
 cv.imshow('', img)
 cv.waitKey(0)
@@ -237,3 +241,14 @@ masc = cria_mascara(img, c, r)
 
 cv.imshow('', masc)
 cv.waitKey(0)
+
+filtro = filtro_res1(masc)
+
+cv.imshow('', filtro)
+cv.waitKey(0)
+
+
+# hist, b = np.histogram(df.iloc[0,1], bins=256)
+
+# plt.hist(hist)
+# plt.show()
