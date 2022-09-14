@@ -1,12 +1,25 @@
+"""
+Projeto Final da disciplina Introducao ao Processamento de Imagens
+Universidade de Brasilia
+Instituto de Ciencias Exatas
+Departamento de Ciencia da Computacao
+Introducao ao Processamento de Imagens 1/2021
+Professor: Bruno Macchiavello
+Desenvolvido por: Guilherme Silva Souza e Ana Sofia Schweizer Silvestre
+"""
+
+
 import cv2 as cv
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 from sklearn import svm
 from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
 import pandas as pd
 
+"""
+Retira cilios e ranhuras das iris
+"""
 def trata_img(img):
 
     kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(11,11))
@@ -21,6 +34,9 @@ def trata_img(img):
 
     return img
 
+"""
+Segmenta a iris, retorna as coordenadas do centro da pupila, seu raio e o raio da iris
+"""
 def segmenta_iris(img):
 
     pupila = cv.Canny(img,60,100)
@@ -53,6 +69,9 @@ def segmenta_iris(img):
 
     return c, raio
 
+"""
+Cria e aplica mascara para iris segmentada
+"""
 def cria_mascara(img, pupila, r_iris):
 
     print(img.shape)
@@ -72,6 +91,10 @@ def cria_mascara(img, pupila, r_iris):
 
     return mask
 
+
+"""
+Aplica o filtro residual
+"""
 def filtro_res1(img):
 
     row, col = img.shape
@@ -94,6 +117,12 @@ def filtro_res1(img):
 
     return r.astype('uint8')
 
+
+"""
+Utiliza o BRIEF para extracao de feature, retorna um dataframe contendo a classificacao da imagem
+(0 se for uma imagem com ataque, 1 se for uma imagem original) e a descricao gerada pelo BRIEF, tambem
+retorna um dataframe com os histogramas da descricao e uma lista das imagens
+"""
 def feature_extraction(path):
 
     files = os.listdir(path)
@@ -138,6 +167,9 @@ def feature_extraction(path):
 
     return df, df_aux, imgs
 
+"""
+Treina e testa o modelo utilizando uma SVM, tambem mostra as imagens falso positivas e falso negativas
+"""
 def model_training(df, hist, imgs):
 
     param_grid={'C':[0.1,1,10,100],
@@ -155,15 +187,22 @@ def model_training(df, hist, imgs):
     esperado = df.iloc[30:,0].tolist()
 
     print(f'acuracia: {accuracy_score(esperado,pred)*100}%')
+
+    print(classification_report(esperado,pred))
     
     for i in range(len(pred)):
         if pred[i] != esperado[i] and esperado[i]:
             cv.imshow(f'falso negativo (img {i+1})', imgs[30+i])
         elif pred[i] != esperado[i] and not esperado[i]:
-            cv.imshow(f'falso positivo (img {i+1})', imgs[i])
+            cv.imshow(f'falso positivo (img {i+1})', imgs[30+i])
     
     cv.waitKey(0)
     
+"""
+Funcao que foi uilizada para gerar o dataset
+
+Move de diretorio e renomeia as imagens atacasa
+"""
 def pega_img():
     
     lista = os.listdir('/home/anasofia/Downloads/OLHO/')
@@ -174,11 +213,23 @@ def pega_img():
         os.system(f'mv database/olhos/falso/{i} database/olhos/falso/{c}.jpg')
         c += 1
 
+"""
+Funcao que foi uilizada para gerar o dataset
+
+Renomeia imagens verdadeiras
+"""
 def cria_database(quant):
 
     for i in range(quant):
         os.system(f'mv database/olhos/verdadeiro/{(f"{i+1}").zfill(3)}_1_1.jpg database/olhos/verdadeiro/{i+1}.jpg')
         
+"""
+Funcao que foi uilizada para gerar o dataset
+
+Aplica todas as etapas antes da feature extraction em todas as imagens do database e salva,
+as iris segmentadas estão no diretorio database/olhos/tratado/ e as segmentadas com filtro
+no database/olhos/tratado_filtro/
+"""
 def pre_processing():
 
     for i in range(20):
@@ -192,6 +243,9 @@ def pre_processing():
 
         # cv.circle(img_seg,(c[0],c[1]),c[2],(255,0,0),2)
         # cv.circle(img_seg,(c[0],c[1]),int(raio*1.01),(255,0,0),2)
+
+        # cv.imshow('', img_seg)
+        # cv.waitKey(0)
 
         mascara = cria_mascara(img, c, raio)
         cv.imwrite(f'database/olhos/tratado/{i+1}_v.jpg', mascara)
@@ -222,14 +276,18 @@ def pre_processing():
 MAIN
 """
 
+# treinando com os dados sem filtro
 print('treinando com os dados sem filtro:', end='')
 df, hist, imgs = feature_extraction('database/olhos/tratado/')
 model_training(df, hist, imgs)
 
+# treinando com os dados com filtro
 print('treinando com os dados com filtro:', end='')
 df, hist, imgs = feature_extraction('database/olhos/tratado_filtro/')
 model_training(df, hist, imgs)
 
+
+#teste individual da segmentacao e do filtro
 img = cv.imread('database/olhos/verdadeiro/1.jpg', 0)
 
 cv.imshow('', img)
@@ -246,9 +304,3 @@ filtro = filtro_res1(masc)
 
 cv.imshow('', filtro)
 cv.waitKey(0)
-
-
-# hist, b = np.histogram(df.iloc[0,1], bins=256)
-
-# plt.hist(hist)
-# plt.show()
